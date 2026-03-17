@@ -1,0 +1,451 @@
+/* =========================================
+   1. LAYOUT CHUNG & CARD
+   ========================================= */
+.system-admin-dashboard {
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  color: #333;
+}
+
+.system-admin-dashboard h2 {
+  margin-bottom: 20px;
+  color: #2c3e50;
+}
+
+.admin-card {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  margin-bottom: 25px;
+  transition: all 0.3s ease;
+}
+
+.admin-card h3 {
+  margin-top: 0;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+  margin-bottom: 15px;
+}
+
+/* =========================================
+   2. FORM THÊM / SỬA WEBSITE
+   ========================================= */
+.admin-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-form input {
+  flex: 1;
+  min-width: 200px;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  outline: none;
+}
+
+.admin-form input:focus {
+  border-color: #007bff;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-submit {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.btn-submit:hover {
+  background-color: #0056b3;
+}
+
+/* Chế độ đang Sửa */
+.editing-mode {
+  border: 2px solid #ffc107;
+  background-color: #fffdf5;
+}
+
+.btn-update {
+  background-color: #ffc107;
+  color: #212529;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.btn-update:hover {
+  background-color: #e0a800;
+}
+
+.btn-cancel {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.btn-cancel:hover {
+  background-color: #5a6268;
+}
+
+/* =========================================
+   3. BẢNG DANH SÁCH (TABLE CHÍNH)
+   ========================================= */
+.table-responsive {
+  overflow-x: auto;
+}
+
+.web-list-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.web-list-table th, .web-list-table td {
+  border: 1px solid #eee;
+  padding: 12px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.web-list-table th {
+  background-color: #f4f6f8;
+  font-weight: 600;
+}
+
+.api-key {
+  background: #f1f3f5;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: monospace;
+  color: #e83e8c;
+}
+
+/* Trạng thái hoạt động / Khóa */
+.status-badge {
+  padding: 5px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  display: inline-block;
+  user-select: none;
+}
+
+.status-badge.active {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.status-badge.inactive {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.inactive-row td {
+  opacity: 0.6;
+  background-color: #fafafa;
+}
+
+/* =========================================
+   4. CÁC NÚT THAO TÁC (ACTION BUTTONS)
+   ========================================= */
+.action-buttons-cell {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-icon {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.btn-icon.edit:hover {
+  background-color: #fff3cd;
+  border-color: #ffeeba;
+}
+
+.btn-icon.delete:hover {
+  background-color: #f8d7da;
+  border-color: #f5c6cb;
+}
+
+button:disabled, input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* =========================================
+   5. CỬA SỔ MODAL CHUNG
+   ========================================= */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-content {
+  background: white;
+  width: 90%;
+  max-width: 700px;
+  border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  background-color: #f4f6f8;
+  padding: 15px 20px;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 18px;
+}
+
+.modal-header h3 span {
+  color: #007bff;
+}
+
+.btn-close-modal {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #666;
+}
+
+.btn-close-modal:hover {
+  color: #ff0000;
+}
+
+.modal-body {
+  padding: 20px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* =========================================
+   6. QUẢN LÝ DỮ LIỆU RAG (TRONG MODAL)
+   ========================================= */
+.btn-manage-data {
+  background-color: #17a2b8;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 13px;
+  transition: 0.2s;
+}
+
+.btn-manage-data:hover:not(:disabled) {
+  background-color: #138496;
+}
+
+/* Khu vực Upload trong Modal */
+.upload-zone {
+  display: flex;
+  gap: 10px;
+  background-color: #f8f9fa;
+  padding: 15px;
+  border: 1px dashed #ccc;
+  border-radius: 6px;
+  margin-bottom: 25px;
+  align-items: center;
+}
+
+.upload-zone input[type="file"] {
+  flex: 1;
+}
+
+.btn-upload {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.btn-upload:hover {
+  background-color: #218838;
+}
+
+/* Bảng danh sách File trong Modal */
+.document-list-container h4 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #333;
+}
+
+.no-data-text {
+  text-align: center;
+  color: #888;
+  font-style: italic;
+  padding: 20px;
+  background: #fdfdfd;
+  border: 1px solid #eee;
+  border-radius: 4px;
+}
+
+/* =========================================
+   7. QUẢN LÝ NHÂN VIÊN (TRONG MODAL)
+   ========================================= */
+/* Cột chứa 2 nút File và Nhân viên */
+.app-config-cell {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Nút quản lý Nhân viên */
+.btn-manage-staff {
+  background-color: #6f42c1;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 13px;
+  transition: 0.2s;
+}
+
+.btn-manage-staff:hover:not(:disabled) {
+  background-color: #59339d;
+}
+
+/* Kích thước rộng hơn cho Modal Nhân viên */
+.modal-large {
+  max-width: 800px;
+}
+
+/* Khu vực form thêm/sửa nhân viên */
+.modal-form-zone {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+.modal-form-zone h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.editing-staff {
+  background-color: #fffdf5;
+  border-color: #ffc107;
+}
+
+.staff-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.staff-form input, .staff-form select {
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  flex: 1;
+  min-width: 150px;
+  outline: none;
+}
+
+.staff-form input:focus, .staff-form select:focus {
+  border-color: #007bff;
+}
+
+/* =========================================
+   8. BẢNG BÊN TRONG MODAL (INNER TABLE)
+   ========================================= */
+.inner-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.inner-table th, .inner-table td {
+  border: 1px solid #eee;
+  padding: 10px;
+  text-align: left;
+  font-size: 14px;
+}
+
+.inner-table th {
+  background-color: #f1f3f5;
+}
+
+.text-center {
+  text-align: center;
+  color: #888;
+  font-style: italic;
+  padding: 15px;
+}
+
+/* Nhãn phân quyền Nhân viên */
+.role-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.role-badge.manager {
+  background-color: #cce5ff;
+  color: #004085;
+}
+
+.role-badge.staff {
+  background-color: #e2e3e5;
+  color: #383d41;
+}

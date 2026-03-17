@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ApiService from '../services/ApiService';
 
 const UploadExcel = () => {
@@ -6,6 +6,12 @@ const UploadExcel = () => {
   const [response, setResponse] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Initialize API key on mount
+  useEffect(() => {
+    ApiService.initApiKey();
+    console.log(`🔑 Upload Excel - API Key initialized`);
+  }, []);
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];

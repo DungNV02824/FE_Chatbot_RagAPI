@@ -17,12 +17,19 @@ const StaffDashboard = () => {
   const messagesEndRef = useRef(null);
   const shouldScrollRef = useRef(false);
 
+  // Initialize API key on mount
+  useEffect(() => {
+    ApiService.initApiKey();
+    console.log(`🔑 Staff Dashboard - API Key initialized: ${ApiService.getApiKey()}`);
+  }, []);
+
   const fetchPendingTickets = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await ApiService.getPendingEscalations(50);
-      setEscalations(Array.isArray(data) ? data : []);
+      const data = await ApiService.getPendingEscalations(50, 'pending');
+      // API returns { escalations: [...] }
+      setEscalations(Array.isArray(data.escalations) ? data.escalations : []);
     } catch (error) {
       setError(`Failed to fetch escalations: ${error.message}`);
     } finally {
@@ -136,8 +143,14 @@ const StaffDashboard = () => {
     shouldScrollRef.current = true;
 
     try {
+      // Kiểm tra conversation_id có sẵn
+      if (!selectedTicket.conversation_id) {
+        setError('Không tìm thấy conversation cho người dùng này');
+        return;
+      }
+
       const result = await ApiService.sendStaffReply(
-        selectedTicket.id,
+        selectedTicket.conversation_id,
         messageToSend,
         staffName
       );
@@ -324,7 +337,7 @@ const StaffDashboard = () => {
                     <div className="ticket-info">
                       <div className="ticket-reason">📌 {ticket.reason}</div>
                       <div className="ticket-message">
-                        💬 {ticket.last_message.substring(0, 50)}...
+                        💬 {ticket.last_message ? ticket.last_message.substring(0, 50) : 'Không có tin nhắn'}...
                       </div>
                       {ticket.assigned_to && (
                         <div className="ticket-assigned">👤 {ticket.assigned_to}</div>

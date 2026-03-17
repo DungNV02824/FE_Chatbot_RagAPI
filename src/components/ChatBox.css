@@ -227,6 +227,7 @@
 .chat-messages {
   flex: 1;
   overflow-y: auto;
+  overflow-anchor: none;
   padding: 1.5rem;
   background: var(--bg-main);
   display: flex;
