@@ -267,7 +267,116 @@ export const ApiService = {
     );
     if (!response.ok) throw new Error(`Disable bot error: ${response.statusText}`);
     return response.json();
-  }
+  },
+  // ==========================================
+  // QUẢN LÝ TENANT (SYSTEM ADMIN - KHÔNG CẦN API KEY HEADER)
+  // ==========================================
+
+  async getTenants() {
+    const response = await fetch(`${API_BASE_URL}/tenants/`, {
+      method: 'GET',
+      headers: { 'accept': 'application/json' }
+    });
+    if (!response.ok) throw new Error("Lỗi lấy danh sách Tenant");
+    return response.json();
+  },
+
+  async createTenant(tenantData) {
+    const response = await fetch(`${API_BASE_URL}/tenants/`, {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(tenantData)
+    });
+    if (!response.ok) throw new Error("Lỗi khi tạo tenant");
+    return response.json();
+  },
+
+  async updateTenant(tenantId, tenantData) {
+    const response = await fetch(`${API_BASE_URL}/tenants/${tenantId}`, {
+      method: 'PUT',
+      headers: {
+        'accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(tenantData)
+    });
+    if (!response.ok) throw new Error("Lỗi khi cập nhật tenant");
+    return response.json();
+  },
+
+  // THÊM HÀM XÓA DỰA THEO CODE BACKEND CỦA BẠN
+  async deleteTenant(tenantId) {
+    const response = await fetch(`${API_BASE_URL}/tenants/${tenantId}`, {
+      method: 'DELETE',
+      headers: { 'accept': 'application/json' }
+    });
+    // Trạng thái 204 No Content không có body trả về, nên chỉ cần check ok
+    if (!response.ok) throw new Error("Lỗi khi xóa tenant");
+    return true; 
+  },
+
+  // ==========================================
+  // API NGHIỆP VỤ (BẮT BUỘC TRUYỀN API KEY)
+  // ==========================================
+  async uploadExcel(file, customApiKey) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    // GỬI CHÍNH XÁC API KEY CỦA WEBSITE ĐÓ XUỐNG
+    const response = await fetch(`${API_BASE_URL}/upload-excel`, {
+      method: 'POST',
+      headers: {
+        'x-api-key': customApiKey
+      },
+      body: formData
+    });
+
+    if (!response.ok) throw new Error("Lỗi Upload File RAG");
+    return response.json();
+  },
+
+  /**
+   * Xóa toàn bộ dữ liệu RAG của 1 Tenant
+   * @param {string} customApiKey - API Key của Website cần xóa
+   */
+  async clearRagData(customApiKey) {
+    const response = await fetch(`${API_BASE_URL}/documents/clear`, {
+      method: 'DELETE',
+      headers: {
+        'x-api-key': customApiKey,
+        'accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || "Lỗi khi xóa dữ liệu trên Server");
+    }
+    return response.json();
+  },
+  /**
+   * Lấy danh sách Người truy cập / Khách hàng của 1 Website cụ thể
+   * @param {string} customApiKey - API Key của Website cần xem
+   */
+  async getTenantUsers(customApiKey) {
+    const response = await fetch(`${API_BASE_URL}/users`, {
+      method: 'GET',
+      headers: {
+        'x-api-key': customApiKey,
+        'accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Lỗi lấy danh sách khách hàng: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+
 };
 
 export default ApiService;
