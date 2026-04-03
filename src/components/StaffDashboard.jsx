@@ -29,9 +29,12 @@ const StaffDashboard = () => {
     try {
       const data = await ApiService.getPendingEscalations(50, 'pending');
       // API returns { escalations: [...] }
-      setEscalations(Array.isArray(data.escalations) ? data.escalations : []);
+      const list = Array.isArray(data.escalations) ? data.escalations : [];
+      setEscalations(list);
+      return list;
     } catch (error) {
       setError(`Failed to fetch escalations: ${error.message}`);
+      return [];
     } finally {
       setIsLoading(false);
     }
@@ -54,8 +57,10 @@ const StaffDashboard = () => {
     try {
       const data = await ApiService.getConversationMessages(conversationId, 100);
       if (data.messages) {
-        // Backend returns newest first, so reverse to show oldest first
-        setTicketMessages(data.messages.reverse());
+        // BE đã trả về theo thứ tự cũ -> mới, giữ nguyên để:
+        // - Tin nhắn cũ ở trên
+        // - Tin nhắn mới ở dưới
+        setTicketMessages(data.messages);
       }
     } catch (error) {
       console.log('Error fetching ticket messages:', error);
@@ -188,18 +193,50 @@ const StaffDashboard = () => {
 
   const handleUpdateStatus = async (ticketId, newStatus) => {
     try {
-      const result = await ApiService.updateEscalation(
-        ticketId,
-        newStatus,
-        staffName || 'Support Team',
-        selectedTicket?.note || ''
-      );
-      
-      await fetchPendingTickets();
-      if (selectedTicket && selectedTicket.id === ticketId) {
-        setSelectedTicket(result);
-      }
       setError(null);
+
+      // Note: BE không nhận "note" cho endpoint /assign.
+      // Với /resolve thì có thể truyền resolution_note (optional).
+      const resolutionNote = (replyMessage || '').trim();
+      const existingTicket = selectedTicket && selectedTicket.id === ticketId ? selectedTicket : null;
+      const noteFromUI = (existingTicket?.note || '').trim(); // nếu có (một số case FE có thể set)
+      const finalResolutionNote = resolutionNote || noteFromUI;
+
+      if (newStatus === 'resolved') {
+        await ApiService.resolveEscalation(ticketId, finalResolutionNote);
+      } else if (newStatus === 'in_progress') {
+        await ApiService.updateEscalation(
+          ticketId,
+          'in_progress',
+          staffName || 'Support Team',
+          ''
+        );
+      } else if (newStatus === 'pending') {
+        // BE không có endpoint set lại pending qua staff.py ở UI hiện tại
+        setError('Chưa hỗ trợ chuyển về Pending từ UI này.');
+        return;
+      } else {
+        setError(`Trạng thái không hợp lệ: ${newStatus}`);
+        return;
+      }
+
+      const updatedList = await fetchPendingTickets();
+      const updated = updatedList.find((t) => t.id === ticketId);
+      if (updated) {
+        setSelectedTicket(updated);
+      } else {
+        // Ticket vừa chuyển status sang in_progress/resolved => có thể không còn nằm trong pending list
+        setSelectedTicket((prev) => {
+          if (!prev || prev.id !== ticketId) return prev;
+          if (newStatus === 'in_progress') {
+            return { ...prev, status: newStatus, assigned_to: staffName || prev.assigned_to };
+          }
+          if (newStatus === 'resolved') {
+            return { ...prev, status: newStatus };
+          }
+          return prev;
+        });
+      }
     } catch (error) {
       setError(`Error updating status: ${error.message}`);
     }

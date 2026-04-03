@@ -55,7 +55,7 @@ class LocalStorageService {
 
       localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(simplifiedMessages));
       localStorage.setItem(LAST_TIMESTAMP_KEY, new Date().toISOString());
-      console.log('✅ Chat history saved:', simplifiedMessages.length, 'messages');
+      // console.log('✅ Chat history saved:', simplifiedMessages.length, 'messages');
     } catch (e) {
       console.warn('⚠️ Failed to save chat history:', e);
       // Có thể localStorage quá full, xóa 50% message cù nhất
@@ -110,7 +110,7 @@ class LocalStorageService {
   static saveUserInfo(userInfo) {
     try {
       localStorage.setItem(USER_INFO_KEY, JSON.stringify(userInfo));
-      console.log('✅ User info saved');
+      // console.log('✅ User info saved');
     } catch (e) {
       console.warn('⚠️ Failed to save user info:', e);
     }

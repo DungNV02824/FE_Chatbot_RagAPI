@@ -10,7 +10,7 @@ const UploadExcel = () => {
   // Initialize API key on mount
   useEffect(() => {
     ApiService.initApiKey();
-    console.log(`🔑 Upload Excel - API Key initialized`);
+    // console.log(`🔑 Upload Excel - API Key initialized`);
   }, []);
 
   const handleFileChange = (e) => {

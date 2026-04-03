@@ -10,7 +10,7 @@
     // Initialize API key on mount
     useEffect(() => {
       ApiService.initApiKey();
-      console.log(`🔑 Initialized API Key from storage`);
+      // console.log(`🔑 Initialized API Key from storage`);
     }, []);
     
     const [messages, setMessages] = useState([
@@ -20,6 +20,7 @@
     const [isLoading, setIsLoading] = useState(false);
     const [isMinimized, setIsMinimized] = useState(false);  
     const [anonymousId, setAnonymousId] = useState(guestId);
+    const [conversationId, setConversationId] = useState(null);
     const [showSettings, setShowSettings] = useState(false);
     const [fullscreenImage, setFullscreenImage] = useState(null);
     const [hasActiveEscalation, setHasActiveEscalation] = useState(false);
@@ -33,6 +34,7 @@
     const messagesEndRef = useRef(null);
     const [isOpen, setIsOpen] = useState(true);
     const pollIntervalRef = useRef(null);
+    const staffWsRef = useRef(null);
     const [searchUserId, setSearchUserId] = useState('');
     const [viewingUserId, setViewingUserId] = useState(null);
     const [isSearching, setIsSearching] = useState(false);
@@ -46,13 +48,26 @@
     });
     const [showLoadHistory, setShowLoadHistory] = useState(false);
     const [isChatDisabled, setIsChatDisabled] = useState(false);
+    // Khi BE disable bot, FE sẽ hiển thị 1 lần thông báo chờ.
+    // Sau khi nhân viên đã nhắn (staff reply) thì các lần user gửi tiếp sẽ không hiển thị lại câu chờ này.
+    const [hasStaffRepliedSinceDisable, setHasStaffRepliedSinceDisable] = useState(false);
+    const [waitingMessageVisible, setWaitingMessageVisible] = useState(false);
+    const [waitingMessageText, setWaitingMessageText] = useState(
+      'Nhân viên support sẽ sớm phản hồi lại anh/chị ạ. Vui lòng chờ xíu nhé!'
+    );
+    const hasWaitingShownSinceDisableRef = useRef(false);
+    const disableFlagRef = useRef(false);
+    const lastStaffReplyTsRef = useRef(null);
+    const disableAtTsRef = useRef(null);
     const scrollPositionRef = useRef(0);
+    const sendInFlightRef = useRef(false); // Chặn gửi trùng khi Enter bị bấm nhanh
+    const pendingAssistantTextRef = useRef(null); // Chờ server sync assistant message
 
     // ===== Load chat history from localStorage on mount =====
     useEffect(() => {
       const savedHistory = LocalStorageService.getChatHistory();
       if (savedHistory && savedHistory.length > 0) {
-        console.log('📂 Found saved chat history:', savedHistory.length, 'messages');
+        // console.log('📂 Found saved chat history:', savedHistory.length, 'messages');
         setShowLoadHistory(true); // Hiển thị option để load
       }
     }, []);
@@ -88,8 +103,8 @@
     useEffect(() => {
       const messagesContainer = document.querySelector('.chat-messages');
       if (messagesContainer) {
-        // Restore scroll position
-        messagesContainer.scrollTop = scrollPositionRef.current;
+        // Always scroll to bottom to show new messages
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
       }
     }, [messages]);
 
@@ -97,65 +112,159 @@
 
     // Auto-fetch messages to check for staff replies and disable_bot_response flag
     useEffect(() => {
-      console.log(`🔄 useEffect: Auto-fetch enabled`);
+      // console.log(`🔄 useEffect: Auto-fetch enabled`);
 
-      console.log('🚀 Auto-fetch starting...');
+      // console.log('🚀 Auto-fetch starting...');
       const fetchRecentMessages = async () => {
         try {
-          console.log(`📡 Fetching messages for ${anonymousId}...`);
+          // console.log(`📡 Fetching messages for ${anonymousId}...`);
 
           const data = await ApiService.getChatHistory(anonymousId, 50);
 
-          console.log('✅ Got messages from API:', data.messages?.length || 0);
-          console.log(`🤐 disable_bot_response: ${data.disable_bot_response}`);
+          // console.log('✅ Got messages from API:', data.messages?.length || 0);
+          // console.log(`🤐 disable_bot_response: ${data.disable_bot_response}`);
 
-          // Enable escalation if needed
-          if (data.disable_bot_response && !hasActiveEscalation) {
-            console.log('🔔 Bot response disabled - enabling escalation mode');
-            setHasActiveEscalation(true);
+          const disableBot = !!data.disable_bot_response;
+          if (disableBot && !disableFlagRef.current) {
+            // Vừa mới bị disable bot => reset trạng thái đã có staff reply
+            disableFlagRef.current = true;
+            disableAtTsRef.current = Date.now();
+            setHasStaffRepliedSinceDisable(false);
+            lastStaffReplyTsRef.current = null;
+            hasWaitingShownSinceDisableRef.current = false;
+            setWaitingMessageVisible(false);
+            setWaitingMessageText(
+              'Nhân viên support sẽ sớm phản hồi lại anh/chị ạ. Vui lòng chờ xíu nhé!'
+            );
+          } else if (!disableBot && disableFlagRef.current) {
+            // Vừa mới bật lại bot => reset
+            disableFlagRef.current = false;
+            disableAtTsRef.current = null;
+            setHasStaffRepliedSinceDisable(false);
+            lastStaffReplyTsRef.current = null;
+            hasWaitingShownSinceDisableRef.current = false;
+            setWaitingMessageVisible(false);
+          }
+
+          // Sync escalation mode with backend flag
+          if (disableBot) {
+            if (!hasActiveEscalation) {
+              // console.log('🔔 Bot response disabled - enabling escalation mode');
+              setHasActiveEscalation(true);
+            }
+          } else {
+            if (hasActiveEscalation) {
+              // console.log('🔔 Bot response re-enabled - disabling escalation mode');
+              setHasActiveEscalation(false);
+            }
           }
 
           if (!data.messages || data.messages.length === 0) return;
 
-        const apiMessages = data.messages
+        let apiMessages = data.messages
           .map((msg) => {
 
-            const isImage = msg.content?.startsWith("http");
+            const content = msg.content ?? msg.text ?? '';
+            const isImage = typeof content === 'string' && content.startsWith("http");
 
             return {
-              id: msg.id,
-              text: msg.content,
+              id: msg.id, // có thể undefined vì BE history không trả id
+              text: content,
               isUser: msg.role === 'user',
               isImage: isImage,
-              isStaffReply: msg.is_staff_reply || false,
-              staffName: msg.staff_name || null,
+              isStaffReply: msg.is_staff_reply ?? msg.isStaffReply ?? false,
+              staffName: msg.staff_name ?? msg.staffName ?? null,
               created_at: msg.created_at,
-              key: `msg-${msg.id}`
+              key: `msg-${msg.created_at || 'na'}-${content || 'na'}`
             };
 
           })
+          // Loại bỏ các tin nhắn "đang chờ nhân viên" do BE đẩy vào history
+          // để tránh bị trùng với bubble chờ mà FE tự hiển thị.
+          .filter((m) => {
+            if (!disableBot) return true;
+            if (m.isUser) return true;
+            if (m.isStaffReply) return true;
+            if (typeof m.text !== 'string') return true;
+
+            const normalized = m.text.trim();
+            const defaultWaiting = 'Nhân viên support sẽ sớm phản hồi lại anh/chị ạ. Vui lòng chờ xíu nhé!';
+
+            // Nếu BE push đúng message chờ mặc định thì bỏ qua,
+            // FE sẽ tự hiển thị 1 bubble chờ riêng.
+            if (normalized === defaultWaiting) {
+              return false;
+            }
+
+            return true;
+          })
           .sort((a, b) => {
-            return new Date(a.created_at) - new Date(b.created_at);
+            return new Date(a.created_at || 0) - new Date(b.created_at || 0);
           });
 
-        // Save scroll position before updating messages
-        const messagesContainer = document.querySelector('.chat-messages');
-        if (messagesContainer) {
-          scrollPositionRef.current = messagesContainer.scrollTop;
+        // Nếu bot đang bị disable, và trong history có staff reply sau thời điểm disable
+        // thì lần user gửi tiếp sẽ KHÔNG hiển thị lại câu chờ.
+        if (disableBot) {
+          const staffReplies = apiMessages
+            .filter((m) => m.isStaffReply && m.created_at)
+            .map((m) => ({ created_at: m.created_at, ts: new Date(m.created_at).getTime() }))
+            .filter((x) => Number.isFinite(x.ts));
+
+          if (staffReplies.length > 0) {
+            const latest = staffReplies.reduce((max, cur) => (cur.ts > max.ts ? cur : max), staffReplies[0]);
+            const threshold = disableAtTsRef.current ?? -Infinity;
+
+            if (latest.ts >= threshold) {
+              setHasStaffRepliedSinceDisable(true);
+              lastStaffReplyTsRef.current = Math.max(lastStaffReplyTsRef.current ?? 0, latest.ts);
+              setWaitingMessageVisible(false);
+            }
+          }
         }
 
         setMessages(prev => {
-          const prevIdSet = new Set(prev.map(m => m.id).filter(Boolean));
+          if (!apiMessages || apiMessages.length === 0) return prev;
 
-          const hasNewMessage = apiMessages.some(
-            m => m.id && !prevIdSet.has(m.id)
-          );
+          // Nếu đang gửi message (local đang có message tạm), tránh ghi đè UI khi poll.
+          if (isLoading || sendInFlightRef.current) return prev;
 
-          if (hasNewMessage) {
-            // shouldScrollRef.current = true;
+          // Nếu đang chờ một assistant message vừa gửi nhưng server chưa kịp lưu,
+          // thì không ghi đè UI để tránh hiện rồi mất.
+          if (pendingAssistantTextRef.current) {
+            const apiLast = apiMessages[apiMessages.length - 1];
+            if (apiLast && apiLast.text !== pendingAssistantTextRef.current) {
+              return prev;
+            }
           }
 
-          return apiMessages; // 🔥 luôn sync theo server
+          // BE history response hiện chưa trả `id` cho từng message,
+          // nên không thể dùng id để detect message mới.
+          const prevLast = prev[prev.length - 1];
+          const apiLast = apiMessages[apiMessages.length - 1];
+
+          // Nếu server đã trả assistant message đang chờ thì clear pending
+          if (
+            pendingAssistantTextRef.current &&
+            apiLast &&
+            apiLast.text === pendingAssistantTextRef.current
+          ) {
+            pendingAssistantTextRef.current = null;
+          }
+
+          const prevSig = prevLast
+            ? `${prevLast.text}|${prevLast.created_at}|${prevLast.isStaffReply}|${prevLast.staffName}`
+            : '';
+          const apiSig = apiLast
+            ? `${apiLast.text}|${apiLast.created_at}|${apiLast.isStaffReply}|${apiLast.staffName}`
+            : '';
+
+          if (prevSig !== apiSig || apiMessages.length !== prev.length) {
+            // console.log('✅ Syncing messages from server...');
+            return apiMessages;
+          }
+
+          // console.log('ℹ️ No meaningful change from server');
+          return prev;
         });
 
         } catch (error) {
@@ -172,14 +281,97 @@
           clearInterval(pollIntervalRef.current);
         }
       };
-    }, [anonymousId]);
+    }, [anonymousId, hasActiveEscalation]);
+
+    // WebSocket realtime: nhận tin nhắn từ nhân viên (staff_reply)
+    useEffect(() => {
+      if (!conversationId) {
+        // Nếu chưa có conversation thì đóng WS nếu đang mở
+        if (staffWsRef.current) {
+          staffWsRef.current.close();
+          staffWsRef.current = null;
+        }
+        return;
+      }
+
+      // Tránh mở trùng nếu đã có kết nối còn sống
+      if (staffWsRef.current && staffWsRef.current.readyState === WebSocket.OPEN) {
+        return;
+      }
+
+      // Kết nối trực tiếp tới BE (cùng host với API_BASE_URL: http://127.0.0.1:8000)
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsHost = '127.0.0.1:8000';
+      const wsUrl = `${wsProtocol}://${wsHost}/ws/staff-messages/${conversationId}`;
+
+      console.log('🔌 Opening staff WebSocket:', wsUrl);
+      const ws = new WebSocket(wsUrl);
+      staffWsRef.current = ws;
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (!data || !data.content) return;
+
+          console.log('👨‍💼 Realtime staff message:', data);
+
+          const createdAt = data.created_at || new Date().toISOString();
+
+          setMessages(prev => [
+            ...prev,
+            {
+              text: data.content,
+              isUser: false,
+              isStaffReply: data.is_staff_reply,
+              staffName: data.staff_name,
+              created_at: createdAt,
+              key: `staff-${createdAt}-${data.id || Math.random()}`
+            }
+          ]);
+
+          // Khi đã có nhân viên trả lời, ẩn bubble chờ
+          setHasStaffRepliedSinceDisable(true);
+          setWaitingMessageVisible(false);
+        } catch (e) {
+          console.log('⚠️ Error parsing staff WS message:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('🔌 Staff WebSocket closed');
+        staffWsRef.current = null;
+      };
+
+      ws.onerror = (err) => {
+        console.log('⚠️ Staff WebSocket error:', err);
+      };
+
+      // Gửi ping nhẹ để giữ kết nối sống (optional)
+      ws.onopen = () => {
+        try {
+          ws.send('ping');
+        } catch (e) {
+          console.log('⚠️ Staff WebSocket ping failed:', e);
+        }
+      };
+
+      return () => {
+        if (staffWsRef.current) {
+          staffWsRef.current.close();
+          staffWsRef.current = null;
+        }
+      };
+    }, [conversationId]);
 
     const sendMessage = async () => {
       const message = input.trim();
-      if (!message || isLoading || isChatDisabled) return;
+      // `isLoading` là state async => có thể chưa kịp set khi user bấm Enter 2 lần nhanh.
+      // Dùng ref để chặn gửi trùng ngay lập tức.
+      if (!message || isChatDisabled) return;
+      if (sendInFlightRef.current || isLoading) return;
 
-      // Save scroll position before adding message
-      saveScrollPosition();
+      sendInFlightRef.current = true;
+      const hadConversationId = conversationId != null;
 
       // Add message with temporary created_at timestamp to prevent duplicates from auto-fetch
       const now = new Date().toISOString();
@@ -191,32 +383,44 @@
         key: `msg-${now}-${uniqueId}`
       }]);
       setInput('');
-      
-      // If escalation (staff is handling), send message to API but don't process bot response
-      if (hasActiveEscalation) {
-        console.log('📝 Escalation mode - message sent to staff, waiting for staff reply');
-        try {
-          // Send message to backend to save conversation history
-          // But don't process the bot response
-          await ApiService.sendMessage(message, anonymousId, userInfo);
-        } catch (error) {
-          console.error('Error sending escalation message:', error);
-        }
-        return;
-      }
-
-      // shouldScrollRef.current = true;
-      setIsLoading(true);
 
       try {
-        const data = await ApiService.sendMessage(message, anonymousId, userInfo);
-        
+        // shouldScrollRef.current = true;
+        setIsLoading(true);
+
+        const data = await ApiService.sendMessage(message, anonymousId, conversationId, userInfo);
+
+        // Nếu FE chưa có conversationId (thường xảy ra ở lượt chat đầu tiên),
+        // BE chưa kịp/không trả conversation_id qua SSE done event => admin poll không thấy tin nhắn bot.
+        // Giải pháp: tìm conversation_id qua /users rồi persist câu trả lời bot vào DB.
+        const resolvedConversationIdFromApi = data.conversation_id ?? conversationId;
+        if (!hadConversationId && resolvedConversationIdFromApi == null && data.answer) {
+          try {
+            const usersData = await ApiService.getUsers();
+            const match = Array.isArray(usersData)
+              ? usersData.find((u) => String(u.id) === String(anonymousId))
+              : null;
+
+            if (match?.conversation_id != null) {
+              setConversationId(match.conversation_id);
+              await ApiService.saveChatResponse(match.conversation_id, data.answer);
+            }
+          } catch (e) {
+            console.log('⚠️ Could not resolve conversation_id for manual save:', e?.message || e);
+          }
+        }
+
+        // Update conversationId from response if available
+        if (data.conversation_id) {
+          setConversationId(data.conversation_id);
+        }
+
+        console.log('📨 Got response:', data);
+
         // Handle different response types
         if (data.images && data.images.length > 0) {
-
           // hiện text trước
           if (data.answer) {
-            saveScrollPosition();
             setMessages(prev => [...prev, {
               text: data.answer,
               isUser: false
@@ -225,7 +429,6 @@
 
           // hiện từng ảnh
           data.images.forEach((img) => {
-            saveScrollPosition();
             setMessages(prev => [...prev, {
               text: img,
               isUser: false,
@@ -236,10 +439,9 @@
         } else if (data.type === 'order_form') {
           // Hiển thị form đặt hàng
           const botMessage = data.answer || 'Vui lòng điền thông tin đặt hàng';
-          // shouldScrollRef.current = true;
-          saveScrollPosition();
-          setMessages(prev => [...prev, { 
-            text: botMessage, 
+          pendingAssistantTextRef.current = botMessage;
+          setMessages(prev => [...prev, {
+            text: botMessage,
             isUser: false,
             isOrderForm: true,
             missingFields: data.missing_fields,
@@ -250,22 +452,21 @@
         } else if (data.type === 'waiting_for_staff') {
           // Khi bot bị tắt, hiển thị thông báo đợi nhân viên
           const botMessage = data.answer || 'Nhân viên support sẽ sớm phản hồi lại anh/chị ạ. Vui lòng chờ xíu nhé!';
-          // shouldScrollRef.current = true;
-          saveScrollPosition();
-          setMessages(prev => [...prev, { 
-            text: botMessage, 
-            isUser: false,
-            isType: data.type,
-            isWaitingForStaff: true
-          }]);
+          // Chỉ hiển thị 1 lần sau khi bot bị disable.
+          // Không push vào messages để tránh bị auto-poll ghi đè gây "ẩn hiện".
+          if (!hasStaffRepliedSinceDisable && !hasWaitingShownSinceDisableRef.current) {
+            hasWaitingShownSinceDisableRef.current = true;
+            setWaitingMessageText(botMessage);
+            setWaitingMessageVisible(true);
+          }
           // ✅ Không set hasActiveEscalation ở đây - chỉ là bot bị tắt tạm thời
           // Khi bật lại bot, chatbot sẽ trả lời bình thường
         } else {
           const botMessage = data.answer || data.response || JSON.stringify(data);
-          // shouldScrollRef.current = true;
-          saveScrollPosition();
-          setMessages(prev => [...prev, { 
-            text: botMessage, 
+          console.log('📝 Displaying bot message:', botMessage);
+          pendingAssistantTextRef.current = botMessage;
+          setMessages(prev => [...prev, {
+            text: botMessage,
             isUser: false,
             isType: data.type,
             relatedProducts: data.related_products
@@ -276,10 +477,8 @@
         if (data.staff_notification) {
           setHasActiveEscalation(true);
           const staffMsg = `👨‍💼 Phản hồi từ ${data.staff_notification.assigned_to || 'nhân viên support'}:\n\n"${data.staff_notification.note}"`;
-          // shouldScrollRef.current = true;
-          saveScrollPosition();
-          setMessages(prev => [...prev, { 
-            text: staffMsg, 
+          setMessages(prev => [...prev, {
+            text: staffMsg,
             isUser: false,
             isStaffNotification: true
           }]);
@@ -287,16 +486,20 @@
           setHasActiveEscalation(true);
         }
       } catch (error) {
-        // shouldScrollRef.current = true;
-        saveScrollPosition();
-        setMessages(prev => [...prev, { 
-          text: `❌ Lỗi: ${error.message}`, 
+        console.error('❌ Error sending message:', error);
+        setMessages(prev => [...prev, {
+          text: `❌ Lỗi: ${error.message}`,
           isUser: false,
           isError: true
         }]);
       } finally {
         setIsLoading(false);
+        sendInFlightRef.current = false;
       }
+
+      // Luôn tắt guard
+      // (setIsLoading(false) ở finally phía trên đảm bảo UX)
+      sendInFlightRef.current = false;
     };
 
     const handleKeyPress = (e) => {
@@ -378,32 +581,31 @@
       });
 
       // Gửi message xác nhận
-      // shouldScrollRef.current = true;
       const confirmMsg = `Tên: ${orderFormData.fullName}\nSĐT: ${orderFormData.phone}\nEmail: ${orderFormData.email || '(không có)'}\nĐịa chỉ: ${orderFormData.address}`;
-      saveScrollPosition();
       setMessages(prev => [...prev, { text: confirmMsg, isUser: true }]);
       setShowOrderForm(false);
       
       setIsLoading(true);
       try {
-        const data = await ApiService.sendMessage('', anonymousId, {
+        const data = await ApiService.sendMessage('', anonymousId, conversationId, {
           name: orderFormData.fullName,
           phone: orderFormData.phone,
           email: orderFormData.email,
           address: orderFormData.address
         });
 
+        // Update conversationId from response if available
+        if (data.conversation_id) {
+          setConversationId(data.conversation_id);
+        }
+
         const botMessage = data.answer || 'Tạo đơn hàng thành công!';
-        // shouldScrollRef.current = true;
-        saveScrollPosition();
         setMessages(prev => [...prev, { 
           text: botMessage, 
           isUser: false,
           isType: data.type
         }]);
       } catch (error) {
-        // shouldScrollRef.current = true;
-        saveScrollPosition();
         setMessages(prev => [...prev, { 
           text: `❌ Lỗi: ${error.message}`, 
           isUser: false,
@@ -424,24 +626,22 @@
       try {
         const data = await ApiService.getChatHistory(searchUserId, 100);
         if (data.messages && data.messages.length > 0) {
-          // shouldScrollRef.current = true;
           const apiMessages = data.messages.map((msg) => ({
-            id: msg.id, // 🔥 QUAN TRỌNG
+            id: msg.id,
             text: msg.content,
             isUser: msg.role === 'user',
             isStaffReply: msg.is_staff_reply || false,
             staffName: msg.staff_name || null,
             created_at: msg.created_at,
-            key: `msg-${msg.id}` // 🔥 DÙNG ID LÀM KEY
+            key: `msg-${msg.id}`
           }));
-          saveScrollPosition();
           setMessages(apiMessages);
           setViewingUserId(searchUserId);
           setAnonymousId(searchUserId);
           localStorage.setItem('anonymousId', searchUserId);
+          console.log('✅ Loaded', apiMessages.length, 'messages for user:', searchUserId);
         } else {
           alert('Không tìm thấy tin nhắn cho người dùng này');
-          saveScrollPosition();
           setMessages([{ text: 'Xin chào! Tôi là chatbot hỗ trợ khách hàng. Bạn cần giúp gì không?', isUser: false }]);
         }
       } catch (error) {
@@ -499,6 +699,31 @@
         </button>
       );
     }
+
+    // Render messages: loại bỏ các message waiting cũ khỏi state để tránh nhấp nháy
+    const messagesForRender = messages.filter((m) => !m.isWaitingForStaff);
+    const waitingMessageObj =
+      waitingMessageVisible && !hasStaffRepliedSinceDisable
+        ? {
+            text: waitingMessageText,
+            isUser: false,
+            isType: 'waiting_for_staff',
+            isWaitingForStaff: true
+          }
+        : null;
+
+    const renderedMessages = waitingMessageObj
+      ? [...messagesForRender, waitingMessageObj]
+      : messagesForRender;
+
+    // Whenever waiting bubble is toggled, scroll to bottom
+    useEffect(() => {
+      if (!waitingMessageVisible) return;
+      const messagesContainer = document.querySelector('.chat-messages');
+      if (messagesContainer) {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }
+    }, [waitingMessageVisible]);
 
     return (
       <div className={`chat-container ${isMinimized ? 'minimized' : ''}`}>
@@ -667,7 +892,7 @@
           <>
             <div className="chat-messages">
               {/* {[...messages].reverse().map((msg) => ( */}
-                {messages.map((msg, index) => (
+                {renderedMessages.map((msg, index) => (
                   <div key={msg.id || index}>
                   <div 
                     className={`message ${msg.isUser ? 'user' : 'bot'} ${msg.isError ? 'error' : ''} ${msg.isImage ? 'image-message' : ''} ${msg.isStaffNotification ? 'staff-notification' : ''} ${msg.isStaffReply ? 'staff-reply' : ''} ${msg.isOrderForm ? 'order-form-message' : ''} ${msg.isWaitingForStaff ? 'waiting-for-staff' : ''}`}
